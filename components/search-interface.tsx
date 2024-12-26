@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { TextSelection, CaseSensitive, Regex } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 
 interface SearchResult {
@@ -17,41 +16,69 @@ interface SearchResult {
   }[]
 }
 
-export default function SearchInterface() {
-  const [query, setQuery] = useState('')
+interface SearchInterfaceProps {
+  initialQuery?: string
+}
+
+export default function SearchInterface({ initialQuery = '' }: SearchInterfaceProps) {
+  const [query, setQuery] = useState(initialQuery)
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
+  const [searchTime, setSearchTime] = useState<number | null>(null)
 
-  // Simulate fast search results
+  const searchCases = useCallback((searchQuery: string) => {
+    const startTime = performance.now()
+    
+    // Simulate instant search with mock data
+    const mockResults: SearchResult[] = [
+      {
+        jurisdiction: 'United States',
+        path: 'supreme-court/civil-rights/brown-v-board.cc',
+        matches: 100,
+        content: [
+          { line: 55, text: 'Equal Protection Clause of the Fourteenth Amendment...' },
+          { line: 56, text: 'separate educational facilities are inherently unequal' }
+        ]
+      },
+      {
+        jurisdiction: 'European Union',
+        path: 'eu-court-justice/data-protection/schrems-v-facebook.js',
+        matches: 100,
+        content: [
+          { line: 63, text: 'Transfer of personal data to third countries...' },
+          { line: 64, text: 'Adequacy of protection provided by Safe Harbor principles' }
+        ]
+      }
+    ].filter(result => 
+      result.path.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      result.content.some(line => line.text.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+
+    setResults(mockResults)
+    setSearchTime(performance.now() - startTime)
+  }, [])
+
+  // Perform search on mount if initial query exists
   useEffect(() => {
-    if (query.length > 0) {
-      // This would be replaced with actual API call
-      const mockResults: SearchResult[] = [
-        {
-          jurisdiction: 'United States',
-          path: 'supreme-court/civil-rights/brown-v-board.cc',
-          matches: 100,
-          content: [
-            { line: 55, text: 'Equal Protection Clause of the Fourteenth Amendment...' },
-            { line: 56, text: 'separate educational facilities are inherently unequal' }
-          ]
-        },
-        {
-          jurisdiction: 'European Union',
-          path: 'eu-court-justice/data-protection/schrems-v-facebook.js',
-          matches: 100,
-          content: [
-            { line: 63, text: 'Transfer of personal data to third countries...' },
-            { line: 64, text: 'Adequacy of protection provided by Safe Harbor principles' }
-          ]
-        }
-      ]
-      setResults(mockResults)
-    } else {
-      setResults([])
+    if (initialQuery) {
+      searchCases(initialQuery)
     }
-  }, [query])
+  }, [initialQuery, searchCases])
+
+  // Perform search on query change
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (query.length > 0) {
+        searchCases(query)
+      } else {
+        setResults([])
+        setSearchTime(null)
+      }
+    }, 10) // Very short debounce for instant feel
+
+    return () => clearTimeout(debounceTimer)
+  }, [query, searchCases])
 
   const caseTypes = [
     { name: 'Criminal Law', count: '3M' },
@@ -75,7 +102,7 @@ export default function SearchInterface() {
   ]
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full">
       {/* Left Sidebar */}
       <div className="w-64 border-r bg-background p-4 flex flex-col gap-6">
         {/* Case Type Filter */}
@@ -135,17 +162,24 @@ export default function SearchInterface() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search legal cases..."
               className="pr-24"
+              autoFocus
             />
-            <div className="absolute right-2 top-2 flex gap-1">
-              <Button variant="ghost" size="icon">
-                <TextSelection className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <CaseSensitive className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon">
-                <Regex className="h-4 w-4" />
-              </Button>
+            <div className="absolute right-3 top-3 flex items-center gap-2">
+              <button className="p-1 hover:bg-accent rounded-sm">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
+                  <path d="M8 2H12M8 8H14M8 14H10M4 2V14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              <button className="p-1 hover:bg-accent rounded-sm">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
+                  <path d="M11 2V7M11 14V11M11 11V7M11 11H14M11 7H14M2 9V14M2 2V5M2 5V9M2 5H5M2 9H5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              <button className="p-1 hover:bg-accent rounded-sm">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
+                  <path d="M13 3L8 13L3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -153,8 +187,16 @@ export default function SearchInterface() {
         {/* Results */}
         <div className="flex-1 overflow-auto p-4">
           {query && (
-            <div className="text-sm text-muted-foreground mb-4">
-              {results.length > 0 ? `${results.length.toLocaleString()} results found` : 'No results found'}
+            <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
+              <span>{results.length > 0 ? `${results.length.toLocaleString()} results found` : 'No results found'}</span>
+              {searchTime !== null && (
+                <span className="flex items-center gap-1">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-yellow-500">
+                    <path d="M13 3L8 13L3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Search completed in {searchTime.toFixed(2)} ms
+                </span>
+              )}
             </div>
           )}
           
